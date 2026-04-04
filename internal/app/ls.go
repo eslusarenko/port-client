@@ -9,8 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var verbose bool
-
 var lsCmd = &cobra.Command{
 	Use:   "ls",
 	Short: "List all TCP listening ports",
@@ -18,10 +16,12 @@ var lsCmd = &cobra.Command{
 }
 
 func init() {
-	lsCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show full command line and arguments")
+	lsCmd.Flags().BoolP("verbose", "v", false, "Show full command line and arguments")
 }
 
-func runLs(_ *cobra.Command, _ []string) error {
+func runLs(cmd *cobra.Command, _ []string) error {
+	verbose, _ := cmd.Flags().GetBool("verbose")
+
 	entries, err := ports.ListListening()
 	if err != nil {
 		return err

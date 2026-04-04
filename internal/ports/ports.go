@@ -56,15 +56,19 @@ func ListListening() ([]Entry, error) {
 	return entries, nil
 }
 
-// normalizeAddr replaces the wildcard "*" with the canonical address for the given family.
+// normalizeAddr returns the canonical wildcard address for the given family
+// when addr is any known wildcard representation, or the original addr otherwise.
+// Handles macOS ("*"), Linux ("0.0.0.0" / "::"), and empty string defensively.
 func normalizeAddr(addr, kind string) string {
-	if addr != "*" && addr != "" {
+	switch addr {
+	case "", "*", "0.0.0.0", "::":
+		if kind == "tcp6" {
+			return "::"
+		}
+		return "0.0.0.0"
+	default:
 		return addr
 	}
-	if kind == "tcp6" {
-		return "::"
-	}
-	return "0.0.0.0"
 }
 
 // lookupProcessInfo returns a human-friendly display name and the full command line
