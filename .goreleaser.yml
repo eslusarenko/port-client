@@ -11,6 +11,9 @@ builds:
       - amd64
       - arm64
     main: ./cmd/port-client
+    binary: port
+    ldflags:
+      - -s -w -X github.com/eslusarenko/port-client/internal/version.Version={{.Version}}
 
 archives:
   - formats: ['tar.gz']

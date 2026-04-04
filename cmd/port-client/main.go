@@ -1,7 +1,7 @@
 package main
 
-import "fmt"
+import "github.com/eslusarenko/port-client/internal/app"
 
 func main() {
-	fmt.Println("port-client")
+	app.Execute()
 }

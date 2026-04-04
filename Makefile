@@ -1,10 +1,13 @@
-.PHONY: build test lint clean release-dry
+.PHONY: build test lint clean release-dry run-ls
+
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X github.com/eslusarenko/port-client/internal/version.Version=$(VERSION)
 
 build:
-	go build -o bin/port-client ./cmd/port-client
+	/usr/local/go/bin/go build -ldflags "$(LDFLAGS)" -o bin/port ./cmd/port-client
 
 test:
-	go test -race ./...
+	/usr/local/go/bin/go test -race ./...
 
 lint:
 	golangci-lint run
@@ -14,3 +17,6 @@ clean:
 
 release-dry:
 	goreleaser release --snapshot --clean
+
+run-ls:
+	/usr/local/go/bin/go run ./cmd/port-client ls
