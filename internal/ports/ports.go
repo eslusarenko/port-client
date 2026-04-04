@@ -3,6 +3,7 @@ package ports
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	gopsnet "github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
@@ -63,7 +64,10 @@ func normalizeAddr(addr, kind string) string {
 	return "0.0.0.0"
 }
 
-// lookupProcess returns the process name for the given PID, or "-" if unavailable.
+// lookupProcess returns a human-friendly process name for the given PID.
+// On macOS, if the executable lives inside a .app bundle, the outermost
+// bundle name is returned (e.g. "IntelliJ IDEA CE" instead of "cef_server").
+// Falls back to the raw process name, or "-" if nothing is available.
 func lookupProcess(pid int32) string {
 	if pid == 0 {
 		return "-"
@@ -72,9 +76,34 @@ func lookupProcess(pid int32) string {
 	if err != nil {
 		return "-"
 	}
+
+	if exe, err := p.Exe(); err == nil {
+		if appName := appBundleName(exe); appName != "" {
+			return appName
+		}
+	}
+
 	name, err := p.Name()
 	if err != nil {
 		return "-"
 	}
 	return name
+}
+
+// appBundleName extracts the outermost macOS .app bundle name from an executable path.
+// For example:
+//
+//	/Applications/IntelliJ IDEA CE.app/Contents/jbr/.../cef_server → "IntelliJ IDEA CE"
+//	/Applications/Google Drive.app/Contents/MacOS/Google Drive      → "Google Drive"
+//
+// Returns an empty string if the path is not inside a .app bundle.
+func appBundleName(exePath string) string {
+	idx := strings.Index(exePath, ".app/")
+	if idx == -1 {
+		return ""
+	}
+	// Walk back to the preceding slash to isolate the bundle directory name.
+	segment := exePath[:idx]
+	start := strings.LastIndex(segment, "/") + 1
+	return segment[start:]
 }
