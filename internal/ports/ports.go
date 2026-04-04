@@ -15,7 +15,8 @@ type Entry struct {
 	LocalAddr string
 	Port      uint32
 	PID       int32
-	Process   string // process name, "-" if unknown or unavailable
+	Process   string // human-friendly process name, "-" if unavailable
+	CmdLine   string // full executable path with arguments, "-" if unavailable
 }
 
 // ListListening returns all TCP ports currently in LISTEN state, sorted by port then proto.
@@ -33,12 +34,14 @@ func ListListening() ([]Entry, error) {
 				continue
 			}
 
+			name, cmdLine := lookupProcessInfo(c.Pid)
 			entries = append(entries, Entry{
 				Proto:     kind,
 				LocalAddr: normalizeAddr(c.Laddr.IP, kind),
 				Port:      c.Laddr.Port,
 				PID:       c.Pid,
-				Process:   lookupProcess(c.Pid),
+				Process:   name,
+				CmdLine:   cmdLine,
 			})
 		}
 	}
@@ -64,30 +67,41 @@ func normalizeAddr(addr, kind string) string {
 	return "0.0.0.0"
 }
 
-// lookupProcess returns a human-friendly process name for the given PID.
-// On macOS, if the executable lives inside a .app bundle, the outermost
-// bundle name is returned (e.g. "IntelliJ IDEA CE" instead of "cef_server").
-// Falls back to the raw process name, or "-" if nothing is available.
-func lookupProcess(pid int32) string {
+// lookupProcessInfo returns a human-friendly display name and the full command line
+// for the given PID. Both values fall back to "-" if unavailable.
+// A single process.Process object is created to avoid redundant syscalls.
+func lookupProcessInfo(pid int32) (name, cmdLine string) {
 	if pid == 0 {
-		return "-"
-	}
-	p, err := process.NewProcess(pid)
-	if err != nil {
-		return "-"
+		return "-", "-"
 	}
 
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return "-", "-"
+	}
+
+	// Resolve display name: prefer .app bundle name on macOS, fall back to raw name.
 	if exe, err := p.Exe(); err == nil {
 		if appName := appBundleName(exe); appName != "" {
-			return appName
+			name = appName
+		}
+	}
+	if name == "" {
+		if n, err := p.Name(); err == nil {
+			name = n
+		} else {
+			name = "-"
 		}
 	}
 
-	name, err := p.Name()
-	if err != nil {
-		return "-"
+	// Full command line with arguments.
+	if cl, err := p.Cmdline(); err == nil && cl != "" {
+		cmdLine = cl
+	} else {
+		cmdLine = "-"
 	}
-	return name
+
+	return name, cmdLine
 }
 
 // appBundleName extracts the outermost macOS .app bundle name from an executable path.
