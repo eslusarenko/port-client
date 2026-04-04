@@ -22,9 +22,9 @@ func runLs(_ *cobra.Command, _ []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT")
+	fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT\tPID\tPROCESS")
 	for _, e := range entries {
-		fmt.Fprintf(w, "%s\t%s\t%d\n", e.Proto, e.LocalAddr, e.Port)
+		fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\n", e.Proto, e.LocalAddr, e.Port, e.PID, e.Process)
 	}
 
 	return w.Flush()
