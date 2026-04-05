@@ -2,33 +2,6 @@ package ports
 
 import "testing"
 
-func TestIsDockerProcess(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		process string
-		want    bool
-	}{
-		{name: "macos docker desktop", process: "Docker", want: true},
-		{name: "linux docker proxy", process: "docker-proxy", want: true},
-		{name: "postgres", process: "postgres", want: false},
-		{name: "empty string", process: "", want: false},
-		{name: "lowercase docker is not a match", process: "docker", want: false},
-		{name: "partial match docker-something", process: "docker-something", want: false},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := isDockerProcess(tc.process)
-			if got != tc.want {
-				t.Errorf("isDockerProcess(%q) = %v, want %v", tc.process, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestNormalizeAddr(t *testing.T) {
 	t.Parallel()
 

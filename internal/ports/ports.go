@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eslusarenko/port-client/internal/docker"
 	gopsnet "github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
 )
@@ -22,9 +21,6 @@ type Entry struct {
 
 // ListListening returns all TCP ports currently in LISTEN state, sorted by port then proto.
 func ListListening() ([]Entry, error) {
-	// Fetch Docker container labels once up front; used for all entries below.
-	dockerLabels, dockerAvail := docker.PortLabels()
-
 	var entries []Entry
 
 	for _, kind := range []string{"tcp4", "tcp6"} {
@@ -39,13 +35,6 @@ func ListListening() ([]Entry, error) {
 			}
 
 			name, cmdLine := lookupProcessInfo(c.Pid)
-
-			if dockerAvail && isDockerProcess(name) {
-				if label, ok := dockerLabels[c.Laddr.Port]; ok {
-					name = "Docker [" + label + "]"
-				}
-			}
-
 			entries = append(entries, Entry{
 				Proto:     kind,
 				LocalAddr: normalizeAddr(c.Laddr.IP, kind),
@@ -117,14 +106,6 @@ func lookupProcessInfo(pid int32) (name, cmdLine string) {
 	}
 
 	return name, cmdLine
-}
-
-// isDockerProcess reports whether the process name corresponds to the Docker
-// host-port proxy on the current platform.
-//   - macOS Docker Desktop: bundle name resolves to "Docker"
-//   - Linux: the proxy binary is named "docker-proxy"
-func isDockerProcess(name string) bool {
-	return name == "Docker" || name == "docker-proxy"
 }
 
 // appBundleName extracts the outermost macOS .app bundle name from an executable path.
