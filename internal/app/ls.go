@@ -59,9 +59,9 @@ func printSection(w *tabwriter.Writer, title string, entries []ports.Entry, verb
 			fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\t%s\n", e.Proto, e.LocalAddr, e.Port, e.PID, e.Process, e.CmdLine)
 		}
 	} else {
-		fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT\tPID\tPROCESS")
+		fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT\tPROCESS")
 		for _, e := range entries {
-			fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\n", e.Proto, e.LocalAddr, e.Port, e.PID, e.Process)
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", e.Proto, e.LocalAddr, e.Port, e.Process)
 		}
 	}
 }
