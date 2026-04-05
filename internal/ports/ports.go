@@ -19,7 +19,7 @@ type Entry struct {
 	CmdLine   string // full executable path with arguments, "-" if unavailable
 }
 
-// ListListening returns all TCP ports currently in LISTEN state, sorted by port then proto.
+// ListListening returns all TCP ports currently in LISTEN state, sorted by port then process name.
 func ListListening() ([]Entry, error) {
 	var entries []Entry
 
@@ -50,7 +50,7 @@ func ListListening() ([]Entry, error) {
 		if entries[i].Port != entries[j].Port {
 			return entries[i].Port < entries[j].Port
 		}
-		return entries[i].Proto < entries[j].Proto
+		return entries[i].Process < entries[j].Process
 	})
 
 	return entries, nil
