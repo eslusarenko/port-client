@@ -39,7 +39,7 @@ func runLs(cmd *cobra.Command, _ []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	printSection(w, "IPv4", ipv4, verbose)
 	if len(ipv4) > 0 && len(ipv6) > 0 {
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 	printSection(w, "IPv6", ipv6, verbose)
 
@@ -51,17 +51,17 @@ func printSection(w *tabwriter.Writer, title string, entries []ports.Entry, verb
 		return
 	}
 
-	fmt.Fprintf(w, "%s\n", title)
+	_, _ = fmt.Fprintf(w, "%s\n", title)
 
 	if verbose {
-		fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT\tPID\tPROCESS\tCOMMAND")
+		_, _ = fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT\tPID\tPROCESS\tCOMMAND")
 		for _, e := range entries {
-			fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\t%s\n", e.Proto, e.LocalAddr, e.Port, e.PID, e.Process, e.CmdLine)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\t%s\n", e.Proto, e.LocalAddr, e.Port, e.PID, e.Process, e.CmdLine)
 		}
 	} else {
-		fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT\tPROCESS")
+		_, _ = fmt.Fprintln(w, "PROTO\tLOCAL ADDR\tPORT\tPROCESS")
 		for _, e := range entries {
-			fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", e.Proto, e.LocalAddr, e.Port, e.Process)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", e.Proto, e.LocalAddr, e.Port, e.Process)
 		}
 	}
 }

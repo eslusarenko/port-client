@@ -1,5 +1,6 @@
-# Example configuration for port
-# Copy to config.yml and adjust as needed
+# port-client configuration
+# Settings can be configured via environment variables or CLI flags.
 
-app:
-  log_level: info
+# PORT_SERVER: server WebSocket URL (default "ws://localhost:8080")
+#   CLI flag: --server
+# PORT_LOG_LEVEL: log level - debug, info, warn, error (default "info")
