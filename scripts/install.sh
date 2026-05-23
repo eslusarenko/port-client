@@ -23,11 +23,19 @@ case "$uname_m" in
   *) fail "Unsupported architecture: $uname_m. This installer supports amd64 and arm64 only." ;;
 esac
 
-tag=$(curl -sSL https://api.github.com/repos/eslusarenko/port-client/releases/latest \
+api_url="https://api.github.com/repos/eslusarenko/port-client/releases/latest"
+http_code=$(curl -sSL -o /dev/null -w '%{http_code}' "$api_url")
+case "$http_code" in
+  200) ;;
+  404) fail "No releases published yet at https://github.com/eslusarenko/port-client/releases" ;;
+  *)   fail "GitHub API returned HTTP $http_code from $api_url" ;;
+esac
+
+tag=$(curl -sSL "$api_url" \
   | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
   | head -n 1)
 
-[ -n "$tag" ] || fail "Could not determine latest release tag from GitHub API."
+[ -n "$tag" ] || fail "Could not parse tag_name from $api_url response."
 
 version=${tag#v}
 tarball="port-client_${version}_${os}_${arch}.tar.gz"
