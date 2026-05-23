@@ -10,7 +10,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		ServerAddr:  envOr("PORT_SERVER", "ws://localhost:8080"),
+		ServerAddr:  envOr("PORT_SERVER", "wss://pm.tnls.lt"),
 		LogLevel:    envOr("PORT_LOG_LEVEL", "info"),
 		MaxBodySize: 10 << 20, // 10 MB
 	}

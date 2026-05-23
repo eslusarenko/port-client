@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,14 +18,56 @@ import (
 	"github.com/eslusarenko/port-client/internal/protocol"
 )
 
+// PrintConfig controls request/header logging to stdout.
+type PrintConfig struct {
+	Requests     bool
+	Headers      bool   // print all headers (--headers)
+	HeaderFilter string // print only these headers, comma-separated (--header)
+}
+
+// headerFilter parses HeaderFilter into a lowercase list of names.
+// Returns nil when all headers should be printed.
+func (p PrintConfig) resolveHeaderFilter() []string {
+	if p.HeaderFilter == "" {
+		return nil // nil = all
+	}
+	// Try JSON array: ["host","user-agent"]
+	var list []string
+	if err := json.Unmarshal([]byte(p.HeaderFilter), &list); err == nil {
+		out := make([]string, 0, len(list))
+		for _, h := range list {
+			if t := strings.ToLower(strings.TrimSpace(h)); t != "" {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	// Comma-separated: host,user-agent
+	parts := strings.Split(p.HeaderFilter, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.ToLower(strings.TrimSpace(p)); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// wantHeaders reports whether any header logging is requested.
+func (p PrintConfig) wantHeaders() bool { return p.Headers || p.HeaderFilter != "" }
+
 // Client manages a tunnel connection to the server and forwards incoming
 // HTTP requests to the local target service.
 type Client struct {
-	serverAddr string
-	targetURL  *url.URL
-	logger     *slog.Logger
-	maxBody    int64
-	httpClient *http.Client
+	serverAddr  string
+	targetURL   *url.URL
+	logger      *slog.Logger
+	maxBody     int64
+	httpClient  *http.Client
+	print       PrintConfig
+	headerNames []string // nil = all; populated when --header filter is set
+	setHost     string   // override Host sent to local app (--set-host)
+	domain      string   // requested subdomain (--domain)
 
 	conn    *websocket.Conn
 	writeMu sync.Mutex
@@ -31,12 +75,16 @@ type Client struct {
 }
 
 // New creates a tunnel client.
-func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int64) *Client {
+func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int64, print PrintConfig, setHost, domain string) *Client {
 	return &Client{
-		serverAddr: serverAddr,
-		targetURL:  targetURL,
-		logger:     logger,
-		maxBody:    maxBody,
+		serverAddr:  serverAddr,
+		targetURL:   targetURL,
+		logger:      logger,
+		maxBody:     maxBody,
+		print:       print,
+		headerNames: print.resolveHeaderFilter(),
+		setHost:     setHost,
+		domain:      domain,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
@@ -44,7 +92,7 @@ func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int
 				return http.ErrUseLastResponse
 			},
 		},
-		done:       make(chan struct{}),
+		done: make(chan struct{}),
 	}
 }
 
@@ -54,6 +102,9 @@ func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int
 // Call Wait() to block until the tunnel is fully closed.
 func (c *Client) Connect(ctx context.Context) (string, error) {
 	wsURL := c.serverAddr + "/tunnel/connect"
+	if c.domain != "" {
+		wsURL += "?subdomain=" + url.QueryEscape(c.domain)
+	}
 	conn, _, err := websocket.Dial(ctx, wsURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("dial server: %w", err)
@@ -161,6 +212,53 @@ func (c *Client) readLoop(ctx context.Context) {
 	}
 }
 
+// logRequest prints request line and/or headers to stdout according to PrintConfig.
+// statusCode 0 means the request failed before a response was received.
+func (c *Client) logRequest(meta protocol.HttpRequestMeta, statusCode int, forwardErr error) {
+	if !c.print.Requests && !c.print.wantHeaders() {
+		return
+	}
+	var sb strings.Builder
+	if c.print.Requests {
+		if statusCode > 0 {
+			_, _ = fmt.Fprintf(&sb, "%s %s → %d\n", meta.Method, meta.Path, statusCode)
+		} else {
+			_, _ = fmt.Fprintf(&sb, "%s %s → ERR: %v\n", meta.Method, meta.Path, forwardErr)
+		}
+	}
+	if c.print.wantHeaders() {
+		if c.headerNames == nil {
+			// --headers: print all, Host first.
+			if meta.Host != "" {
+				_, _ = fmt.Fprintf(&sb, "Host: %s\n", meta.Host)
+			}
+			for k, vs := range meta.Headers {
+				for _, v := range vs {
+					_, _ = fmt.Fprintf(&sb, "%s: %s\n", k, v)
+				}
+			}
+		} else {
+			// --header list: only requested headers, in specified order.
+			for _, name := range c.headerNames {
+				if name == "host" {
+					if meta.Host != "" {
+						_, _ = fmt.Fprintf(&sb, "Host: %s\n", meta.Host)
+					}
+					continue
+				}
+				for k, vs := range meta.Headers {
+					if strings.ToLower(k) == name {
+						for _, v := range vs {
+							_, _ = fmt.Fprintf(&sb, "%s: %s\n", k, v)
+						}
+					}
+				}
+			}
+		}
+	}
+	_, _ = fmt.Fprint(os.Stdout, sb.String()+"\n")
+}
+
 func (c *Client) handleRequest(ctx context.Context, requestID uint32, payload []byte) {
 	meta, body, err := protocol.DecodeHttpRequestMeta(payload)
 	if err != nil {
@@ -195,15 +293,19 @@ func (c *Client) handleRequest(ctx context.Context, requestID uint32, payload []
 			req.Header.Add(k, v)
 		}
 	}
-	// Forward the original public Host header so the local service sees the
-	// tunnel hostname (e.g. abc123.tnls.lt) instead of localhost:port.
-	if meta.Host != "" {
+	// Set the Host header forwarded to the local service.
+	// --set-host overrides; otherwise forward the original public hostname.
+	switch {
+	case c.setHost != "":
+		req.Host = c.setHost
+	case meta.Host != "":
 		req.Host = meta.Host
 	}
 	req.ContentLength = meta.ContentLength
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logRequest(meta, 0, err)
 		c.sendRequestError(ctx, requestID, err.Error())
 		return
 	}
@@ -211,9 +313,12 @@ func (c *Client) handleRequest(ctx context.Context, requestID uint32, payload []
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, c.maxBody))
 	if err != nil {
+		c.logRequest(meta, 0, err)
 		c.sendRequestError(ctx, requestID, err.Error())
 		return
 	}
+
+	c.logRequest(meta, resp.StatusCode, nil)
 
 	respMeta := protocol.HttpResponseMeta{
 		StatusCode:    resp.StatusCode,
