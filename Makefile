@@ -4,10 +4,10 @@ VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/eslusarenko/port-client/internal/version.Version=$(VERSION)
 
 build:
-	/usr/local/go/bin/go build -ldflags "$(LDFLAGS)" -o bin/port ./cmd/port-client
+	go build -ldflags "$(LDFLAGS)" -o bin/port ./cmd/port-client
 
 test:
-	/usr/local/go/bin/go test -race ./...
+	go test -race ./...
 
 lint:
 	golangci-lint run
@@ -19,4 +19,4 @@ release-dry:
 	goreleaser release --snapshot --clean
 
 run-ls:
-	/usr/local/go/bin/go run ./cmd/port-client ls
+	go run ./cmd/port-client ls
