@@ -1,6 +1,6 @@
 # port-client configuration
 # Settings can be configured via environment variables or CLI flags.
 
-# PORT_SERVER: server WebSocket URL (default "ws://localhost:8080")
+# PORT_SERVER: server WebSocket URL (default "wss://pm.tnls.lt")
 #   CLI flag: --server
 # PORT_LOG_LEVEL: log level - debug, info, warn, error (default "info")

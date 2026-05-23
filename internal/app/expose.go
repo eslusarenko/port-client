@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/eslusarenko/port-client/internal/config"
 	"github.com/eslusarenko/port-client/internal/tunnel"
@@ -12,17 +13,17 @@ import (
 )
 
 var exposeCmd = &cobra.Command{
-	Use:   "expose <url>",
+	Use:   "expose <port>",
 	Short: "Expose a local service via a public tunnel",
-	Long:  "Creates a tunnel to the server, generating a public URL that forwards traffic to the specified local service.",
-	Example: `  port expose http://localhost:8080
-  port expose http://127.0.0.1:3000
-  port expose --server wss://pm.tnls.lt http://localhost:8891
-  port expose --requests http://localhost:8891
-  port expose --headers http://localhost:8891
-  port expose --header host,user-agent http://localhost:8891
-  port expose --requests --header host,user-agent http://localhost:8891
-  port expose --set-host localhost:8891 http://localhost:8891`,
+	Long:  "Creates a tunnel to the server, generating a public URL that forwards traffic to the local port.",
+	Example: `  port expose 8080
+  port expose 3000
+  port expose --server wss://pm.tnls.lt 8891
+  port expose --requests 8891
+  port expose --headers 8891
+  port expose --header host,user-agent 8891
+  port expose --requests --header host,user-agent 8891
+  port expose --set-host localhost:8891 8891`,
 	Args: cobra.ExactArgs(1),
 	RunE: runExpose,
 }
@@ -37,12 +38,14 @@ func init() {
 }
 
 func runExpose(cmd *cobra.Command, args []string) error {
-	targetURL, err := url.Parse(args[0])
-	if err != nil {
-		return fmt.Errorf("invalid target URL: %w", err)
+	port, err := strconv.Atoi(args[0])
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("invalid port %q: must be an integer between 1 and 65535", args[0])
 	}
-	if targetURL.Scheme != "http" && targetURL.Scheme != "https" {
-		return fmt.Errorf("target URL scheme must be http or https, got %q", targetURL.Scheme)
+
+	targetURL := &url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("localhost:%d", port),
 	}
 
 	cfg := config.Load()
@@ -71,7 +74,7 @@ func runExpose(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("connect to server: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Tunnel ready: %s -> %s\n", publicURL, args[0])
+	fmt.Fprintf(os.Stderr, "Tunnel ready: %s -> %s\n", publicURL, targetURL)
 	fmt.Println(publicURL)
 
 	client.Wait()

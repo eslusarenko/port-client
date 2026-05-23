@@ -17,7 +17,7 @@ Or download a pre-built binary from [Releases](https://github.com/eslusarenko/po
 ## Usage
 
 ```bash
-port-client --help
+port --help
 ```
 
 ## Build from source
