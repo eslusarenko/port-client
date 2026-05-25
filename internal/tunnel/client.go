@@ -21,8 +21,8 @@ import (
 // PrintConfig controls request/header logging to stdout.
 type PrintConfig struct {
 	Requests     bool
-	Headers      bool   // print all headers (--headers)
-	HeaderFilter string // print only these headers, comma-separated (--header)
+	Headers      bool   // print all headers (--all-request-headers)
+	HeaderFilter string // print only these headers, comma-separated (--request-headers)
 }
 
 // headerFilter parses HeaderFilter into a lowercase list of names.
@@ -228,7 +228,7 @@ func (c *Client) logRequest(meta protocol.HttpRequestMeta, statusCode int, forwa
 	}
 	if c.print.wantHeaders() {
 		if c.headerNames == nil {
-			// --headers: print all, Host first.
+			// --all-request-headers: print all, Host first.
 			if meta.Host != "" {
 				_, _ = fmt.Fprintf(&sb, "Host: %s\n", meta.Host)
 			}
@@ -238,7 +238,7 @@ func (c *Client) logRequest(meta protocol.HttpRequestMeta, statusCode int, forwa
 				}
 			}
 		} else {
-			// --header list: only requested headers, in specified order.
+			// --request-headers list: only requested headers, in specified order.
 			for _, name := range c.headerNames {
 				if name == "host" {
 					if meta.Host != "" {

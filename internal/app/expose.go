@@ -15,26 +15,25 @@ import (
 var exposeCmd = &cobra.Command{
 	Use:   "expose <port>",
 	Short: "Expose a local service via a public tunnel",
-	Long:  "Creates a tunnel to the server, generating a public URL that forwards traffic to the local port.",
+	Long: "Creates a tunnel to the server, generating a public URL that forwards traffic to the local port.\n\n" +
+		"Requests are printed by default. Use --silence (-s) to suppress request output.",
 	Example: `  port expose 8080
-  port expose 3000
-  port expose --server wss://pm.tnls.lt 8891
-  port expose --requests 8891
-  port expose --headers 8891
-  port expose --header host,user-agent 8891
-  port expose --requests --header host,user-agent 8891
-  port expose --set-host localhost:8891 8891`,
+  port expose --silence 8891
+  port expose --all-request-headers 8891
+  port expose --request-headers host,user-agent 8891
+  port expose --set-host localhost:8891 8891
+  port expose --server wss://server.example.com 8891`,
 	Args: cobra.ExactArgs(1),
 	RunE: runExpose,
 }
 
 func init() {
 	exposeCmd.Flags().String("server", "", "Server WebSocket URL (overrides PORT_SERVER env var)")
-	exposeCmd.Flags().Bool("requests", false, "Print incoming requests (METHOD URI → STATUS)")
-	exposeCmd.Flags().Bool("headers", false, "Print all request headers")
-	exposeCmd.Flags().String("header", "", "Print only these request headers (comma-separated, e.g. host,user-agent)")
+	exposeCmd.Flags().BoolP("silence", "s", false, "Suppress request output (requests are printed by default)")
+	exposeCmd.Flags().Bool("all-request-headers", false, "Print all request headers")
+	exposeCmd.Flags().String("request-headers", "", "Print only these request headers (comma-separated, e.g. host,user-agent)")
 	exposeCmd.Flags().String("set-host", "", "Override the Host header sent to the local app")
-	exposeCmd.Flags().String("domain", "", "Request a specific subdomain (e.g. --domain api for api.tnls.lt)")
+	exposeCmd.Flags().String("domain", "", "Request a specific subdomain (e.g. --domain myfeature for myfeature.tnls.lt)")
 }
 
 func runExpose(cmd *cobra.Command, args []string) error {
@@ -53,16 +52,16 @@ func runExpose(cmd *cobra.Command, args []string) error {
 		cfg.ServerAddr = serverFlag
 	}
 
-	logRequests, _ := cmd.Flags().GetBool("requests")
-	logHeaders, _ := cmd.Flags().GetBool("headers")
-	headerFilter, _ := cmd.Flags().GetString("header")
+	silence, _ := cmd.Flags().GetBool("silence")
+	logHeaders, _ := cmd.Flags().GetBool("all-request-headers")
+	headerFilter, _ := cmd.Flags().GetString("request-headers")
 	setHost, _ := cmd.Flags().GetString("set-host")
 	domain, _ := cmd.Flags().GetString("domain")
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	print := tunnel.PrintConfig{
-		Requests:     logRequests,
+		Requests:     !silence,
 		Headers:      logHeaders,
 		HeaderFilter: headerFilter,
 	}
