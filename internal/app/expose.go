@@ -66,7 +66,7 @@ func runExpose(cmd *cobra.Command, args []string) error {
 		HeaderFilter: headerFilter,
 	}
 
-	client := tunnel.New(cfg.ServerAddr, targetURL, logger, cfg.MaxBodySize, print, setHost, domain)
+	client := tunnel.New(cfg.ServerAddr, targetURL, logger, cfg.MaxBodySize, print, setHost, domain, cfg.APIKey)
 
 	publicURL, err := client.Connect(cmd.Context())
 	if err != nil {

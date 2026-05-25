@@ -68,6 +68,7 @@ type Client struct {
 	headerNames []string // nil = all; populated when --header filter is set
 	setHost     string   // override Host sent to local app (--set-host)
 	domain      string   // requested subdomain (--domain)
+	apiKey      string
 
 	conn    *websocket.Conn
 	writeMu sync.Mutex
@@ -75,7 +76,7 @@ type Client struct {
 }
 
 // New creates a tunnel client.
-func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int64, print PrintConfig, setHost, domain string) *Client {
+func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int64, print PrintConfig, setHost, domain, apiKey string) *Client {
 	return &Client{
 		serverAddr:  serverAddr,
 		targetURL:   targetURL,
@@ -85,6 +86,7 @@ func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int
 		headerNames: print.resolveHeaderFilter(),
 		setHost:     setHost,
 		domain:      domain,
+		apiKey:      apiKey,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
@@ -105,7 +107,13 @@ func (c *Client) Connect(ctx context.Context) (string, error) {
 	if c.domain != "" {
 		wsURL += "?subdomain=" + url.QueryEscape(c.domain)
 	}
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	var dialOptions *websocket.DialOptions
+	if c.apiKey != "" {
+		dialOptions = &websocket.DialOptions{
+			HTTPHeader: http.Header{"Authorization": []string{"Bearer " + c.apiKey}},
+		}
+	}
+	conn, _, err := websocket.Dial(ctx, wsURL, dialOptions)
 	if err != nil {
 		return "", fmt.Errorf("dial server: %w", err)
 	}

@@ -4,3 +4,6 @@
 # PORT_SERVER: server WebSocket URL (default "wss://pm.tnls.lt")
 #   CLI flag: --server
 # PORT_LOG_LEVEL: log level - debug, info, warn, error (default "info")
+# PORT_API_KEY: API key for authenticating with the server (Bearer token).
+#   Falls back to PORT_API_KEY in ~/.port.conf if the env var is not set.
+#   Leave unset to connect without authentication (--allow-unauthed server mode).
