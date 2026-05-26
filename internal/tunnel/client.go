@@ -113,8 +113,14 @@ func (c *Client) Connect(ctx context.Context) (string, error) {
 			HTTPHeader: http.Header{"Authorization": []string{"Bearer " + c.apiKey}},
 		}
 	}
-	conn, _, err := websocket.Dial(ctx, wsURL, dialOptions)
+	conn, resp, err := websocket.Dial(ctx, wsURL, dialOptions)
 	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
+			if c.apiKey != "" {
+				return "", fmt.Errorf("server rejected API key (invalid or revoked)")
+			}
+			return "", fmt.Errorf("server requires authentication: set PORT_API_KEY or add it to ~/.port.conf")
+		}
 		return "", fmt.Errorf("dial server: %w", err)
 	}
 	conn.SetReadLimit(c.maxBody + protocol.HeaderSize + 4 + 4096)
