@@ -18,6 +18,9 @@ import (
 	"github.com/eslusarenko/port-client/internal/protocol"
 )
 
+// responseChunkSize is the body slice size streamed per WebSocket frame.
+const responseChunkSize = 64 << 10
+
 // PrintConfig controls request/header logging to stdout.
 type PrintConfig struct {
 	Requests     bool
@@ -88,10 +91,14 @@ func New(serverAddr string, targetURL *url.URL, logger *slog.Logger, maxBody int
 		domain:      domain,
 		apiKey:      apiKey,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				// Don't follow redirects — pass them through to the end user.
 				return http.ErrUseLastResponse
+			},
+			Transport: &http.Transport{
+				// Bound time-to-headers from the local app; do NOT bound the
+				// (possibly large/slow) streamed body read.
+				ResponseHeaderTimeout: 30 * time.Second,
 			},
 		},
 		done: make(chan struct{}),
@@ -325,29 +332,53 @@ func (c *Client) handleRequest(ctx context.Context, requestID uint32, payload []
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, c.maxBody))
-	if err != nil {
-		c.logRequest(meta, 0, err)
-		c.sendRequestError(ctx, requestID, err.Error())
-		return
-	}
-
 	c.logRequest(meta, resp.StatusCode, nil)
 
-	respMeta := protocol.HttpResponseMeta{
+	// Send response headers (Content-Length forwarded verbatim from the origin).
+	headMeta := protocol.HttpResponseMeta{
 		StatusCode:    resp.StatusCode,
 		Headers:       resp.Header,
-		ContentLength: int64(len(respBody)),
+		ContentLength: resp.ContentLength,
 	}
-
-	respPayload, err := protocol.EncodeHttpMeta(respMeta, respBody)
+	headPayload, err := protocol.EncodeHttpMeta(headMeta, nil)
 	if err != nil {
 		c.sendRequestError(ctx, requestID, err.Error())
 		return
 	}
+	headMsg := protocol.EncodeMessage(protocol.TypeHttpResponseHead, requestID, headPayload)
+	c.writeMu.Lock()
+	headErr := c.conn.Write(ctx, websocket.MessageBinary, headMsg)
+	c.writeMu.Unlock()
+	if headErr != nil {
+		return
+	}
 
-	msg := protocol.EncodeMessage(protocol.TypeHttpResponse, requestID, respPayload)
+	// Stream the body in chunks until EOF or error.
+	buf := make([]byte, responseChunkSize)
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			chunk := protocol.EncodeMessage(protocol.TypeHttpResponseChunk, requestID, buf[:n])
+			c.writeMu.Lock()
+			writeErr := c.conn.Write(ctx, websocket.MessageBinary, chunk)
+			c.writeMu.Unlock()
+			if writeErr != nil {
+				return // visitor/tunnel gone; stop reading the origin
+			}
+		}
+		if readErr == io.EOF {
+			c.sendResponseEnd(ctx, requestID, "")
+			return
+		}
+		if readErr != nil {
+			c.sendResponseEnd(ctx, requestID, readErr.Error())
+			return
+		}
+	}
+}
 
+func (c *Client) sendResponseEnd(ctx context.Context, requestID uint32, errMsg string) {
+	msg := protocol.EncodeMessage(protocol.TypeHttpResponseEnd, requestID, []byte(errMsg))
 	c.writeMu.Lock()
 	_ = c.conn.Write(ctx, websocket.MessageBinary, msg)
 	c.writeMu.Unlock()
